@@ -41,6 +41,8 @@ def _run_pylint(path: str) -> list[dict]:
         [
             sys.executable, "-m", "pylint", path,
             "--output-format=json", "--score=n",
+            # skip pure style chatter and "module not installed" noise
+            "--disable=C,R0903,E0401",
         ],
         capture_output=True, text=True, timeout=120,
     )
