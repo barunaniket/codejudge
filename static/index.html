@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CodeJudge · LLM-as-a-Judge Code Auditor</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚖️</text></svg>">
+  <script src="/vendor/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                      mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'] },
+        colors: { ink: { 950: '#07090f', 900: '#0b0f19', 850: '#0f1422', 800: '#141a2b', 700: '#1e2639', 600: '#2a3350' } }
+      } }
+    };
+  </script>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="bg-ink-950 text-slate-200 font-sans antialiased min-h-screen">
+
+  <!-- ============================== TOP BAR -->
+  <header class="sticky top-0 z-30 border-b border-white/5 bg-ink-950/80 backdrop-blur">
+    <div class="max-w-[1400px] mx-auto px-5 h-16 flex items-center gap-6">
+      <a href="#audit" class="flex items-center gap-2.5 shrink-0">
+        <div class="logo-mark">⚖</div>
+        <div class="leading-tight">
+          <div class="font-semibold text-white tracking-tight">CodeJudge</div>
+          <div class="text-[10.5px] text-slate-500 uppercase tracking-[0.14em]">LLM-as-a-Judge Auditor</div>
+        </div>
+      </a>
+      <nav class="hidden md:flex items-center gap-1 text-sm" id="nav">
+        <a href="#audit" data-view="audit" class="nav-link">Audit</a>
+        <a href="#history" data-view="history" class="nav-link">History</a>
+        <a href="#models" data-view="models" class="nav-link">Models</a>
+        <a href="#about" data-view="about" class="nav-link">How it works</a>
+      </nav>
+      <div class="ml-auto flex items-center gap-2 text-xs">
+        <div id="chip-gpu" class="chip hidden"></div>
+        <button id="chip-model" class="chip" onclick="location.hash='#models'">
+          <span class="dot bg-slate-500"></span><span>No model loaded</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-[1400px] mx-auto px-5 py-8">
+
+    <!-- ============================== MODELS VIEW -->
+    <section id="view-models" class="view hidden">
+      <div class="text-center max-w-2xl mx-auto mb-10 mt-4">
+        <div class="eyebrow">Step 1 · Choose your judge</div>
+        <h1 class="text-4xl md:text-5xl font-semibold text-white tracking-tight mt-3">Select a judge model</h1>
+        <p class="text-slate-400 mt-4">All models run <b class="text-slate-200">100% locally</b> on your GPU through Ollama.
+          No code ever leaves this machine. The selected model is loaded into VRAM and kept warm for fast audits.</p>
+      </div>
+      <div id="model-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto"></div>
+      <div id="ollama-down" class="hidden max-w-xl mx-auto mt-8 card p-5 border-rose-500/30 text-sm">
+        <div class="text-rose-300 font-medium">Ollama is not running</div>
+        <div class="text-slate-400 mt-1">Start it in a terminal with <code class="kbd">ollama serve</code>, then refresh.</div>
+      </div>
+    </section>
+
+    <!-- ============================== AUDIT VIEW -->
+    <section id="view-audit" class="view hidden">
+      <div class="flex flex-wrap items-end gap-4 mb-6">
+        <div>
+          <div class="eyebrow">Step 2 · Submit code</div>
+          <h1 class="text-3xl font-semibold text-white tracking-tight mt-2">Audit Python code</h1>
+        </div>
+        <div class="ml-auto flex flex-wrap gap-2">
+          <select id="sample-select" class="input w-60"><option value="">Load a demo sample…</option></select>
+          <label class="btn-ghost cursor-pointer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0-12l-4 4m4-4l4 4"/></svg>
+            Upload .py
+            <input id="file-input" type="file" accept=".py" class="hidden">
+          </label>
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-[1fr_380px] gap-5">
+        <!-- editor -->
+        <div class="card overflow-hidden flex flex-col">
+          <div class="flex items-center gap-3 px-4 h-11 border-b border-white/5 bg-ink-850">
+            <div class="flex gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-400/70"></span><span class="w-2.5 h-2.5 rounded-full bg-amber-400/70"></span><span class="w-2.5 h-2.5 rounded-full bg-emerald-400/70"></span></div>
+            <input id="filename" value="snippet.py" class="bg-transparent text-sm text-slate-300 font-mono focus:outline-none w-64">
+            <span id="line-count" class="ml-auto text-xs text-slate-500 font-mono">0 lines</span>
+          </div>
+          <div class="editor">
+            <pre id="gutter" class="gutter" aria-hidden="true">1</pre>
+            <textarea id="code" spellcheck="false" placeholder="# Paste Python code here, upload a file, or load a demo sample…"></textarea>
+          </div>
+        </div>
+
+        <!-- pipeline -->
+        <div class="card p-5 flex flex-col">
+          <div class="flex items-center justify-between">
+            <div class="text-sm font-semibold text-white">Judge pipeline</div>
+            <div id="pipe-timer" class="text-xs font-mono text-slate-500">idle</div>
+          </div>
+          <ol id="pipeline" class="mt-4 space-y-1 flex-1"></ol>
+          <button id="run-btn" class="btn-primary mt-5 w-full h-12 text-[15px]">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            Run audit
+          </button>
+          <div id="run-hint" class="text-[11.5px] text-slate-500 mt-2 text-center"></div>
+        </div>
+      </div>
+
+      <div id="results" class="mt-10"></div>
+    </section>
+
+    <!-- ============================== HISTORY VIEW -->
+    <section id="view-history" class="view hidden">
+      <div class="eyebrow">Analytics</div>
+      <h1 class="text-3xl font-semibold text-white tracking-tight mt-2 mb-6">Audit history</h1>
+      <div id="history-stats" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+      <div class="card overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-left text-xs uppercase tracking-wider text-slate-500 border-b border-white/5">
+            <tr><th class="px-5 py-3">Grade</th><th class="px-3 py-3">File</th><th class="px-3 py-3">Score</th>
+                <th class="px-3 py-3">Issues</th><th class="px-3 py-3">Model</th><th class="px-3 py-3">Time</th>
+                <th class="px-3 py-3">When</th><th class="px-5 py-3 text-right">Actions</th></tr>
+          </thead>
+          <tbody id="history-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================== ABOUT VIEW -->
+    <section id="view-about" class="view hidden">
+      <div class="max-w-4xl mx-auto">
+        <div class="eyebrow">Architecture</div>
+        <h1 class="text-3xl font-semibold text-white tracking-tight mt-2">How CodeJudge works</h1>
+        <p class="text-slate-400 mt-3">A hybrid audit engine: fast deterministic static analysers find candidate problems,
+          then a panel of LLM judge agents reviews the code, verifies every static warning, and a chief judge
+          delivers the final verdict and a fixed version of the code.</p>
+        <div id="arch" class="mt-8"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================== LOADING OVERLAY -->
+  <div id="loader" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink-950/85 backdrop-blur-md p-4">
+    <div class="card w-full max-w-lg p-7 shadow-2xl shadow-indigo-500/10">
+      <div class="flex items-center gap-4">
+        <div id="loader-icon" class="spinner"></div>
+        <div class="min-w-0">
+          <div class="text-xs text-slate-500 uppercase tracking-[0.14em]">Loading judge model</div>
+          <div id="loader-model" class="text-lg font-semibold text-white truncate"></div>
+        </div>
+        <div id="loader-pct" class="ml-auto text-2xl font-semibold tabular-nums text-white">0%</div>
+      </div>
+      <div class="mt-6 h-2.5 rounded-full bg-ink-700 overflow-hidden">
+        <div id="loader-bar" class="h-full w-0 rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 transition-[width] duration-300"></div>
+      </div>
+      <div id="loader-msg" class="mt-3 text-sm text-slate-400 font-mono h-5 truncate"></div>
+      <ul id="loader-steps" class="mt-6 space-y-2.5 text-sm"></ul>
+      <div class="mt-6 rounded-xl bg-ink-850 border border-white/5 p-4">
+        <div class="flex justify-between text-xs text-slate-500"><span id="vram-label">GPU memory</span><span id="vram-num" class="font-mono"></span></div>
+        <div class="mt-2 h-1.5 rounded-full bg-ink-700 overflow-hidden"><div id="vram-bar" class="h-full w-0 bg-emerald-400 transition-[width] duration-500"></div></div>
+      </div>
+      <div id="loader-done" class="hidden mt-6">
+        <div id="loader-summary" class="grid grid-cols-3 gap-3 text-center"></div>
+        <button class="btn-primary w-full h-11 mt-5" onclick="closeLoader(true)">Start auditing →</button>
+      </div>
+      <div id="loader-err" class="hidden mt-6">
+        <div id="loader-err-msg" class="text-sm text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-lg p-3"></div>
+        <button class="btn-ghost w-full mt-3" onclick="closeLoader(false)">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 hidden"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
