@@ -6,6 +6,7 @@ Then open http://localhost:8000
 import asyncio
 import json
 import math
+import re
 import time
 
 from fastapi import FastAPI, HTTPException
@@ -136,7 +137,7 @@ async def unload_model():
 # ------------------------------------------------------------------ audit
 @app.get("/api/samples")
 async def samples():
-    return [{"name": p.stem.replace("_", " ").title(), "filename": p.name, "code": p.read_text()}
+    return [{"name": re.sub(r"^\d+_", "", p.stem).replace("_", " ").title(), "filename": p.name, "code": p.read_text()}
             for p in sorted(SAMPLES_DIR.glob("*.py"))]
 
 
