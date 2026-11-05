@@ -133,7 +133,7 @@ original code and the reports of the Security, Performance and Code Quality
 agents plus verified static-analysis findings.
 Produce:
   - "verdict": a 2-3 sentence executive summary of the code's overall health,
-    written for a engineering manager.
+    written for an engineering manager.
   - "top_risks": the 3 most important problems to fix first (short phrases),
     or an empty list if the code is fine.
   - "fixed_code": the COMPLETE corrected Python file that fixes the security,
