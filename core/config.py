@@ -20,6 +20,20 @@ MODEL_CATALOG = [
         "tag": "Recommended",
         "desc": "Best audit quality. Fits fully inside a 6 GB GPU.",
     },
+    {
+        "name": "qwen2.5-coder:3b",
+        "label": "Qwen2.5-Coder 3B",
+        "size_gb": 1.9,
+        "tag": "Fast",
+        "desc": "Roughly 2x faster, slightly less precise.",
+    },
+    {
+        "name": "qwen2.5-coder:1.5b",
+        "label": "Qwen2.5-Coder 1.5B",
+        "size_gb": 1.0,
+        "tag": "Ultra-light",
+        "desc": "Runs anywhere. Good for quick demos, weakest judge.",
+    },
 ]
 
 # Weights used to combine the three agent scores into one overall score.
