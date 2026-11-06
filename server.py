@@ -147,6 +147,8 @@ async def audit(req: AuditRequest):
         raise HTTPException(409, "No model loaded. Select and load a model first.")
     if not req.code.strip():
         raise HTTPException(400, "No code provided.")
+    if len(req.code.splitlines()) > 400:
+        raise HTTPException(413, "File too long for one audit (max 400 lines).")
 
     async def gen():
         try:
