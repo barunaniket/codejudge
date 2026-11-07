@@ -258,6 +258,7 @@ async function initEditor() {
       c.setRangeText('    ', s, c.selectionEnd, 'end');
       syncGutter();
     }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runAudit();
   });
   $('#file-input').addEventListener('change', async (e) => {
     const f = e.target.files[0];
@@ -286,7 +287,7 @@ function updateRunButton() {
   btn.disabled = state.running || !hasModel || !hasCode;
   $('#run-hint').innerHTML = !hasModel ? 'Load a model first · <a class="text-indigo-300" href="#models">select model</a>'
     : !hasCode ? 'Paste code, upload a file or pick a demo sample'
-    : state.running ? 'Judges are deliberating…' : `Judge: <span class="font-mono text-slate-400">${esc(state.status.model)}</span>`;
+    : state.running ? 'Judges are deliberating…' : `Judge: <span class="font-mono text-slate-400">${esc(state.status.model)}</span> · Ctrl+Enter`;
 }
 
 // ------------------------------------------------------------------ pipeline + audit
