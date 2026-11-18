@@ -17,6 +17,20 @@ from .analyzers import run_static
 from .config import SCORE_WEIGHTS
 
 SEVERITIES = ["critical", "high", "medium", "low"]
+CRITICAL_KEYWORDS = [
+    "injection", "cwe-89", "cwe-78", "cwe-94", "cwe-95", "eval(", "exec(", "pickle",
+    "cwe-502", "deserializ", "remote code execution", "hardcoded credential",
+    "hardcoded secret", "hardcoded password", "hardcoded api key", "hard-coded", "cwe-798",
+]
+
+
+PERF_WORDS = ["loop", "concaten", "complex", "nested", "quadratic", "leak", "close",
+               "memory", "cache", "slow", "performance", "efficien", "repeated"]
+
+
+def _similar(a: str, b: str) -> bool:
+    wa, wb = set(a.lower().split()), set(b.lower().split())
+    return bool(wa and wb) and len(wa & wb) / min(len(wa), len(wb)) >= 0.5
 
 
 def number_lines(code: str) -> str:
@@ -104,6 +118,27 @@ async def run_audit(code: str, filename: str, model: str):
         yield step(key, "done", detail=f"score {agents[key]['score']}/10 · "
                    f"{len(agents[key]['issues'])} issues", secs=round(time.time() - t, 1))
 
+    # Rule 1 - severity normalisation: well-known exploitable classes are always critical.
+    for i in agents["security"]["issues"]:
+        text = f"{i['title']} {i['description']} {i['cwe']}".lower()
+        if any(k in text for k in CRITICAL_KEYWORDS):
+            i["severity"] = "critical"
+    # Rule 2 - one owner per line: lines flagged by Security belong to Security only,
+    # which removes duplicate / hallucinated findings from the other agents.
+    sec_lines = {i["line"] for i in agents["security"]["issues"]}
+    for key in ("performance", "quality"):
+        agents[key]["issues"] = [i for i in agents[key]["issues"] if i["line"] not in sec_lines]
+    # Rule 3 - Performance vs Quality duplicates (same line, similar title): keep one copy,
+    # in Performance only if the title is clearly about speed/resources.
+    for p in list(agents["performance"]["issues"]):
+        for q in list(agents["quality"]["issues"]):
+            if p["line"] == q["line"] and _similar(p["title"], q["title"]):
+                if any(w in p["title"].lower() for w in PERF_WORDS):
+                    agents["quality"]["issues"].remove(q)
+                else:
+                    agents["performance"]["issues"].remove(p)
+                    break
+
     # 3. Verification judge on static findings ----------------------------
     t = time.time()
     yield step("verify", "running")
@@ -139,6 +174,8 @@ async def run_audit(code: str, filename: str, model: str):
         CHIEF_SCHEMA,
     )
     fixed = _strip_fences(str(raw.get("fixed_code", ""))) if raw.get("fixed_code") else ""
+    if not any(a["issues"] for a in agents.values()) and confirmed == 0:
+        fixed = ""                         # nothing to fix -> don't show a cosmetic rewrite
     yield step("chief", "done", detail="verdict + auto-fix ready", secs=round(time.time() - t, 1))
 
     # 5. Deterministic scoring ------------------------------------------------

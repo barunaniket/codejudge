@@ -64,7 +64,15 @@ Rules:
 - Cite the exact line number from the listing for every issue.
 - Keep each description to 1-2 sentences: what is wrong and why it matters.
 - If you find nothing in your area, return an empty "issues" list and a high score.
-- Stay strictly inside your area of responsibility.
+- Stay strictly inside your area of responsibility. Other agents cover the other areas,
+  so never repeat a problem that belongs to another agent.
+Severity guide:
+  critical = directly exploitable: SQL/command/code injection, eval/exec or pickle on
+             untrusted input, hardcoded credentials or API keys
+  high     = serious risk or definite bug: weak password hashing, debug mode in production,
+             crash on common input, path traversal
+  medium   = real problem under some conditions
+  low      = minor improvement
 """
 
 AGENTS = {
