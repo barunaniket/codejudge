@@ -75,11 +75,23 @@ async def chat_json(model: str, system: str, user: str, schema: dict) -> dict:
         "stream": False,
         "format": schema,
         "keep_alive": KEEP_ALIVE,
-        "options": {"temperature": 0, "seed": 42, "num_ctx": NUM_CTX},
+        "options": {"temperature": 0, "seed": 42, "num_ctx": NUM_CTX, "num_predict": 3000},
     }
     async with httpx.AsyncClient(timeout=TIMEOUT) as c:
-        r = await c.post(f"{OLLAMA_URL}/api/chat", json=payload)
-        r.raise_for_status()
+        for attempt in range(3):
+            r = await c.post(f"{OLLAMA_URL}/api/chat", json=payload)
+            if r.status_code == 200:
+                break
+            # Greedy decoding (temperature 0) can get stuck repeating itself.
+            # Retry with a little randomness and a repetition penalty to break the loop.
+            payload["options"].update(temperature=0.3 + 0.2 * attempt, repeat_penalty=1.15,
+                                      seed=42 + attempt + 1)
+        if r.status_code != 200:
+            try:
+                detail = r.json().get("error", r.text)
+            except ValueError:
+                detail = r.text
+            raise RuntimeError(f"Ollama error ({r.status_code}): {detail}")
         content = r.json()["message"]["content"]
     try:
         return json.loads(content)
